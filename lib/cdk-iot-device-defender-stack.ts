@@ -2,6 +2,10 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { aws_iot as iot } from 'aws-cdk-lib';
+
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+
 import { IoTClient, UpdateAccountAuditConfigurationCommand } from "@aws-sdk/client-iot";
 
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -22,137 +26,61 @@ export class CdkIotDeviceDefenderStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const auditCheckConfigurationProperty: iot.CfnAccountAuditConfiguration.AuditCheckConfigurationProperty = {
-      enabled: true,
-    };
 
-  //   const iotDeviceDefenderPolicy = new PolicyStatement({
-  //     actions: [
-  //         "iot:GetLoggingOptions",
-  //         "iot:GetV2LoggingOptions",
-  //         "iot:ListCACertificates",
-  //         "iot:ListCertificates",
-  //         "iot:DescribeCACertificate",
-  //         "iot:DescribeCertificate",
-  //         "iot:ListPolicies",
-  //         "iot:GetPolicy",
-  //         "iot:GetEffectivePolicies",
-  //         "iot:ListRoleAliases",
-  //         "iot:DescribeRoleAlias",
-  //         "cognito-identity:GetIdentityPoolRoles",
-  //         "iam:ListRolePolicies",
-  //         "iam:ListAttachedRolePolicies",
-  //         "iam:GetRole",
-  //         "iam:GetPolicy",
-  //         "iam:GetPolicyVersion",
-  //         "iam:GetRolePolicy",
-  //         "iam:GenerateServiceLastAccessedDetails",
-  //         "iam:GetServiceLastAccessedDetails"
-  //     ],
-  //     resources: [
-  //         `*`
-  //     ]
-  // });
+    //CReate a Lambda to recieve the event from the SNS
+ const certManagementCertCreateLambdaFunction ="the lambda"
+ console.log(event)
+
+    //CReate a SNS to receive event from Device Defender and send to the previous lambda...
+    const expiredDeviceCertificateSNTopic = new sns.Topic(this, "SNS_DD_Expired_Cert", {
+      displayName: 'Device Defender Expired Certificate SNS',
+      fifo: false
+    });
+    expiredDeviceCertificateSNTopic.addSubscription(new subscriptions.LambdaSubscription(certManagementCertCreateLambdaFunction))
 
 
-  //   const iot_device_defender_role = new Role(this, "DeviceDefenderAccountAuditRole", {
-  //     roleName: "DeviceDefenderAccountAuditRole",
-  //     assumedBy: new ServicePrincipal('iot.amazonaws.com')
-  //   });    
-  //   iot_device_defender_role.addManagedPolicy(ManagedPolicy.fromManagedPolicyName(this, "AWSIoTDeviceDefenderAuditPolicy",'AWSIoTDeviceDefenderAudit'));
-   
-  //   const expiredDeviceCertificateSNSTopic = new sns.Topic(this, "expiredDeviceCertificateSNSTopic", {
-  //     displayName: 'expiredDeviceCertificateSNSTopic',
-  //     fifo: false,
-  //     topicName: 'expiredDeviceCertificateSNSTopic'
-  //   })
+    //Create arole and use AWSIoTDeviceDefenderAudit "sns:publish"
 
-  //   const iotAllowSnsRole = new Role(this, "iotAllowSnsRole", {
-  //     assumedBy: new ServicePrincipal('iot.amazonaws.com'),
-  //     path: "/"
-  //   })
-
-  //   const policyAttachment = new Policy(this, "policyAttachment", {
-  //     statements: [
-  //       new PolicyStatement({
-  //         actions:["sns:Publish"],
-  //         resources:[expiredDeviceCertificateSNSTopic.topicArn]
-  //       })
-  //     ]
-  //   })
+    //IoT -Device Defender
+    const cfnAccountAuditConfiguration = new iot.CfnAccountAuditConfiguration(this, 'MyCfnAccountAuditConfiguration', {
+      accountId: account, <====
+      auditCheckConfigurations: {
+          deviceCertificateExpiringCheck: {
+              enabled: true,
+          }
+      },
+      roleArn: "use this policy AWSIoTDeviceDefenderAudit",
     
-  //   iotAllowSnsRole.attachInlinePolicy(policyAttachment)
+      auditNotificationTargetConfigurations: {
+          sns: {
+              enabled: true,
+              roleArn: iot_topic_rule_role.roleArn,<====
+              targetArn: expiredDeviceCertificateSNTopic.topicArn
+          },
+      },
+    });
 
-    
+    const cfnScheduledAudit = new iot.CfnScheduledAudit(this, 'MyCfnScheduledAudit', {
+        frequency: 'DAILY',
+        targetCheckNames: ['DEVICE_CERTIFICATE_EXPIRING_CHECK'],
+        scheduledAuditName: 'DEVICE_CERTIFICATE_EXPIRING_CHECK'
+    });  
+    cfnScheduledAudit.addDependency(cfnAccountAuditConfiguration)
 
-  //   const cfnAuditCheckConfigurationsProperty = new iot.CfnAccountAuditConfiguration(this, "cfnAuditCheckConfigurationsProperty", {
-  //     accountId: '996242555412',
-  //     auditCheckConfigurations: {
-  //       authenticatedCognitoRoleOverlyPermissiveCheck: {
-  //         enabled: false,
-  //       },
-  //       caCertificateExpiringCheck: {
-  //         enabled: false,
-  //       },
-  //       caCertificateKeyQualityCheck: {
-  //         enabled: false,
-  //       },
-  //       conflictingClientIdsCheck: {
-  //         enabled: false,
-  //       },
-  //       deviceCertificateExpiringCheck: {
-  //         enabled: true,
-  //       },
-  //       deviceCertificateKeyQualityCheck: {
-  //         enabled: false,
-  //       },
-  //       deviceCertificateSharedCheck: {
-  //         enabled: false,
-  //       },
-  //       intermediateCaRevokedForActiveDeviceCertificatesCheck: {
-  //         enabled: false,
-  //       },
-  //       iotPolicyOverlyPermissiveCheck: {
-  //         enabled: false,
-  //       },
-  //       ioTPolicyPotentialMisConfigurationCheck: {
-  //         enabled: false,
-  //       },
-  //       iotRoleAliasAllowsAccessToUnusedServicesCheck: {
-  //         enabled: false,
-  //       },
-  //       iotRoleAliasOverlyPermissiveCheck: {
-  //         enabled: false,
-  //       },
-  //       loggingDisabledCheck: {
-  //         enabled: false,
-  //       },
-  //       revokedCaCertificateStillActiveCheck: {
-  //         enabled: false,
-  //       },
-  //       revokedDeviceCertificateStillActiveCheck: {
-  //         enabled: false,
-  //       },
-  //       unauthenticatedCognitoRoleOverlyPermissiveCheck: {
-  //         enabled: false,
-  //       },
-  //     },
-  //     roleArn: iot_device_defender_role.roleArn,
-  //     auditNotificationTargetConfigurations: {
-  //       sns: {
-  //         enabled: true,
-  //         roleArn: iotAllowSnsRole.roleArn,
-  //         targetArn: expiredDeviceCertificateSNSTopic.topicArn,
-  //       },
-  //     },
-  //   });
-    
-  //   const cfnScheduledAudit = new iot.CfnScheduledAudit(this, "cfnScheduledAudit", {
-  //     frequency: 'DAILY',
-  //     targetCheckNames: ['DEVICE_CERTIFICATE_EXPIRING_CHECK'],
-  //   });
-    
-  //   cfnScheduledAudit.addDependency(cfnAuditCheckConfigurationsProperty)
+
+
+
+
+    //Create Mitigations/Actions that will send Device Defender results to the SNS
+
+
+    https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_iot.CfnMitigationAction.html
+
+    igoralves1@gmail.com
+
+    // Create a expired OR close to expire certificate see README.md
+
+
 
   }
 }
